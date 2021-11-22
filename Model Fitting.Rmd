@@ -1,0 +1,155 @@
+---
+title: "Model Fitting"
+author: "Anna Flieder"
+date: "11/22/2021"
+output: html_document
+---
+
+```{r, warning=FALSE, message=FALSE}
+library(tidyverse)
+library(lubridate)
+library(knitr)
+library(reshape2)
+library(car)
+library(deSolve)
+library(readxl)
+library(minpack.lm) # library for least squares fit using levenberg-marquart algorithm
+library(FME)
+```
+
+
+```{r}
+#probability of someone seeking promotion to next level
+#u= fraction of like-gendered individuals in level above
+#v= fraction of like-gendered individuals in current level
+#lambda= strength of homophilic tendency
+e <- exp(1)
+
+P_func <- function(u, v, lambda){
+  e <- exp(1)
+  denom <- 1 + e^(-lambda*(u-v))
+  return(1/denom)
+}
+
+#fraction of women in applicant pool
+F0_func <- function(u, v, lambda){
+  num <- v*P_func(u, v, lambda)
+  denom <- num + ((1-v)*(P_func(1-u, 1-v, lambda)))
+  return(num/denom)
+}
+
+#fraction of women promoted to next level
+#b= bias (b>0.5 means women are favored)
+F_func <- function(u, v, lambda, b){
+  num <- b*v*P_func(u, v, lambda)
+  denom <- num + ((1-b)*(1-v)*P_func(1-u, 1-v, lambda))
+  return(num/denom)
+}
+```
+
+
+## MODEL VARIABLES
+
+```{r}
+capital_r <- c(1/4, 1/5, 1/6, 1/7, 1/9, 1/15)
+capital_r
+L <- length(capital_r)
+n <- c(13, 8, 5, 3, 2, 1)
+lowercase_r <- vector(mode="numeric", length=length(capital_r))
+
+for(j in seq_along(capital_r)){
+  products <- vector(mode="numeric", length=length((j+1):L))
+  for(k in seq_along(products)){
+    products[k] <- capital_r[j+k]*n[j+k]
+  }
+  num <- sum(products)
+  denom <- capital_r[j] * n[j]
+  final <- num/denom
+  lowercase_r[j] <- final
+}
+lowercase_r
+0 -> lowercase_r[is.na(lowercase_r)]
+lowercase_r
+times <- seq(from=0,to=150,by=1)
+xstart <- c(0.4, 0.3, 0.2, 0.1, 0.05, 0.01)
+```
+
+
+# FULL MODEL
+
+```{r}
+full_model <- function (t, x, parms) {
+  x0 <- 0.5
+  x1 <- x[1]
+  x2 <- x[2]
+  x3 <- x[3]
+  x4 <- x[4]
+  x5 <- x[5]
+  x6 <- x[6]
+  cap_r <- parms$cap_r
+  low_r <- parms$low_r
+  lambda <- parms$lambda
+  b <- parms$bias
+  dx1dt <- (cap_r[1]*(1+low_r[1])*F_func(u = x1, v = x0, lambda = lambda, b = b)) - (cap_r[1]*x1) - (cap_r[1]*low_r[1]*F_func(u = x2, v = x1, lambda = lambda, b = b))
+  dx2dt <- (cap_r[2]*(1+low_r[2])*F_func(u = x2, v = x1, lambda = lambda, b = b)) - (cap_r[2]*x2) - (cap_r[2]*low_r[2]*F_func(u = x3, v = x2, lambda = lambda, b = b))
+  dx3dt <- (cap_r[3]*(1+low_r[3])*F_func(u = x3, v = x2, lambda = lambda, b = b)) - (cap_r[3]*x3) - (cap_r[3]*low_r[3]*F_func(u = x4, v = x3, lambda = lambda, b = b))
+  dx4dt <- (cap_r[4]*(1+low_r[4])*F_func(u = x4, v = x3, lambda = lambda, b = b)) - (cap_r[4]*x4) - (cap_r[4]*low_r[4]*F_func(u = x5, v = x4, lambda = lambda, b = b))
+  dx5dt <- (cap_r[5]*(1+low_r[5])*F_func(u = x5, v = x4, lambda = lambda, b = b)) - (cap_r[5]*x5) - (cap_r[5]*low_r[5]*F_func(u = x6, v = x5, lambda = lambda, b = b))
+  dx6dt <- (cap_r[6]*F_func(u = x6, v = x5, lambda = lambda, b = b)) - (cap_r[6]*x6)
+  derivs <- c(dx1dt, dx2dt, dx3dt, dx4dt, dx5dt, dx6dt)
+  list(derivs)
+}
+
+lambda <- 3
+
+b <- 0.6
+
+params <- list(cap_r = capital_r, low_r = lowercase_r, lambda = lambda, bias = b)
+
+full_output <- ode(y = xstart, times = times, func = full_model, parms = params)
+
+full_output <- as.data.frame(full_output)
+names(full_output) <- c("time", "undergrad", "grad", "postdoc", "tenure track", "tenured prof", "full prof")
+
+full_data <- melt(full_output, id.vars = "time")
+full_data %>% mutate(homo=lambda, bias=0.5)
+head(full_data)
+full_data %>% ggplot(aes(x=time, y=value, color=variable)) +
+  geom_line() +
+  labs(x="Time", y="Fraction Women", color="Levels") +
+  theme_bw()
+```
+
+## FITTING
+
+https://cran.r-project.org/web/packages/FME/FME.pdf
+```{r}
+#estimate your parameters
+lambda_est <- 2
+b_est <- 0.5
+params_est <- list(cap_r = capital_r, low_r = lowercase_r, lambda = lambda_est, bias = b_est)
+params_est
+
+#ensure that your real data has the same #columns, column names, class as full_output
+
+#run the cost function, necessary for modFit
+cost_func <- function(P) {
+  params_est$lambda <- P[1]
+  params_est$bias <- P[2]
+  out <- ode(y = xstart, times = times, func = full_model, parms = params_est)
+  out <- as.data.frame(out)
+  names(out) <- c("time", "undergrad", "grad", "postdoc", "tenure track", "tenured prof", "full prof")
+  #INSERT REAL DATA HERE INSTEAD OF FULL_OUTPUT
+  return(modCost(out, full_output))
+}
+
+#fits the model to your estimations
+fit <- modFit(p = c(lambda = lambda_est, bias = b_est), f = cost_func)
+
+#estimates the parameters in your data
+summary(fit)
+```
+
+
+
+
