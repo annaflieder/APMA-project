@@ -1,0 +1,337 @@
+---
+title: "gender bias data"
+author: "Anna Flieder"
+date: "11/26/2021"
+output: html_document
+---
+
+```{r, warning=FALSE, message=FALSE}
+library(tidyverse)
+library(lubridate)
+library(knitr)
+library(reshape2)
+library(car)
+library(deSolve)
+library(readxl)
+library(minpack.lm) # library for least squares fit using levenberg-marquart algorithm
+library(FME)
+library(gridExtra)
+```
+
+
+2012-2020
+```{r}
+years1 <- 2012:2020
+years1
+data1 <- vector(mode="list", length=length(years1))
+names(data1) <- years1
+
+for(i in seq_along(data1)){
+  name <- paste0("data/s", years1[i], "_is.csv")
+  read_data <- read.csv(name)
+  read_data <- read_data %>% mutate(year=years1[i])
+  data1[[i]] <- as.data.frame(read_data)
+}
+
+
+clean_data1 <- function(x){
+ portion <- x %>% select(year, UNITID, ARANK, HRTOTLT, HRTOTLM, HRTOTLW) %>% filter(ARANK %in% 1:5)
+ summary <- portion %>% group_by(ARANK) %>% summarize(fraction=sum(HRTOTLW)/sum(HRTOTLT))
+ fin <- as.data.frame(summary)
+ fin <- fin %>% mutate(year = portion$year[1])
+ return(as.data.frame(fin))
+}
+
+final_data1 <- lapply(data1, clean_data1)
+
+final1 <- do.call(rbind, final_data1)
+final1
+
+rankings <- c("full professor", "associate professor", "assistant professor", "instructor", "lecturer")
+for(i in seq_along(unique(final1$ARANK))){
+  condition <- final1$ARANK == i
+  final1[condition, "ARANK"] <- rankings[i]
+}
+final1
+
+final1_wide <- dcast(final1, year ~ ARANK, value.var="fraction")
+final1_wide
+
+col_order <- c("year", "lecturer", "instructor", "assistant professor", "associate professor", "full professor")
+final1_wide <- final1_wide[ , col_order]
+names(final1_wide)[1] <- "time"
+final1_wide
+```
+
+
+```{r}
+years2 <- 2001:2011
+data2 <- vector(mode="list", length=length(years2))
+names(data2) <- years2
+
+for(i in seq_along(data2)){
+  name <- paste0("data/s", years2[i], "_f.csv")
+  read_data <- read.csv(name)
+  read_data <- read_data %>% mutate(year=years2[i])
+  data2[[i]] <- as.data.frame(read_data)
+}
+
+data2.1 <- data2[8:11]
+data2.2 <- data2[4:7]
+data2.3 <- data2[1:3]
+
+#same code for hierarchy levels
+ranks_to_pull <- c(1:5, 8:12, 15:19)
+full_prof <- c(1, 8, 15)
+assoc_prof <- c(2, 9, 16)
+assist_prof <- c(3, 10, 17)
+inst <- c(4, 11, 18)
+lect <- c(5, 12, 19)
+
+clean_data2.1 <- function(x){
+  names(x) <- toupper(names(x))
+  dat <- x %>% select(YEAR, UNITID, ARANK, HRTOTLT, HRTOTLM, HRTOTLW) %>% filter(ARANK %in% ranks_to_pull)
+  is_full_prof <- dat$ARANK %in% full_prof
+  is_assoc_prof <- dat$ARANK %in% assoc_prof
+  is_assist_prof <- dat$ARANK %in% assist_prof
+  is_inst <- dat$ARANK %in% inst
+  is_lect <- dat$ARANK %in% lect
+  dat[is_full_prof, "ARANK"] <- "full professor"
+  dat[is_assoc_prof, "ARANK"] <- "associate professor"
+  dat[is_assist_prof, "ARANK"] <- "assistant professor"
+  dat[is_inst, "ARANK"] <- "instructor"
+  dat[is_lect, "ARANK"] <- "lecturer"
+  sums <- dat %>% group_by(ARANK) %>% summarize(fraction=sum(HRTOTLW)/sum(HRTOTLT)) %>% mutate(year=dat$YEAR[1])
+  sums <- as.data.frame(sums)
+  return(sums)
+}
+
+#STAFF24=GRAND TOTAL
+#STAFF15=TOTAL MEN
+#STAFF16=TOTAL WOMEN
+clean_data2.2 <- function(x){
+  names(x) <- toupper(names(x))
+  dat <- x %>% select(YEAR, UNITID, ARANK, STAFF24, STAFF15, STAFF16) %>% filter(ARANK %in% ranks_to_pull)
+  is_full_prof <- dat$ARANK %in% full_prof
+  is_assoc_prof <- dat$ARANK %in% assoc_prof
+  is_assist_prof <- dat$ARANK %in% assist_prof
+  is_inst <- dat$ARANK %in% inst
+  is_lect <- dat$ARANK %in% lect
+  dat[is_full_prof, "ARANK"] <- "full professor"
+  dat[is_assoc_prof, "ARANK"] <- "associate professor"
+  dat[is_assist_prof, "ARANK"] <- "assistant professor"
+  dat[is_inst, "ARANK"] <- "instructor"
+  dat[is_lect, "ARANK"] <- "lecturer"
+  sums <- dat %>% group_by(ARANK) %>% summarize(fraction=sum(STAFF16)/sum(STAFF24)) %>% mutate(year=dat$YEAR[1])
+  sums <- as.data.frame(sums)
+  return(sums)
+}
+
+#STAFF16=TOTAL WOMEN
+#STAFF15=TOTAL MEN
+clean_data2.3 <- function(x){
+  names(x) <- toupper(names(x))
+  dat <- x %>% select(YEAR, UNITID, ARANK, STAFF15, STAFF16) %>% filter(ARANK %in% ranks_to_pull)
+  is_full_prof <- dat$ARANK %in% full_prof
+  is_assoc_prof <- dat$ARANK %in% assoc_prof
+  is_assist_prof <- dat$ARANK %in% assist_prof
+  is_inst <- dat$ARANK %in% inst
+  is_lect <- dat$ARANK %in% lect
+  dat[is_full_prof, "ARANK"] <- "full professor"
+  dat[is_assoc_prof, "ARANK"] <- "associate professor"
+  dat[is_assist_prof, "ARANK"] <- "assistant professor"
+  dat[is_inst, "ARANK"] <- "instructor"
+  dat[is_lect, "ARANK"] <- "lecturer"
+  dat <- dat %>% mutate(TOTAL = STAFF15 + STAFF16)
+  dat <- as.data.frame(dat)
+  sums <- dat %>% group_by(ARANK) %>% summarize(fraction=sum(STAFF16)/sum(TOTAL)) %>% mutate(year=dat$YEAR[1])
+  sums <- as.data.frame(sums)
+  return(sums)
+}
+
+
+final_data2.1 <- lapply(data2.1, clean_data2.1)
+
+final_data2.3 <- lapply(data2.2, clean_data2.2)
+
+final_data2.3 <- lapply(data2.3, clean_data2.3)
+
+final_data2 <- c(final_data2.1, final_data2.2, final_data2.3)
+final2 <- do.call(rbind, final_data2)
+final2
+final2_wide <- dcast(final2, year ~ ARANK, value.var="fraction")
+final2_wide <- final2_wide[ ,col_order]
+names(final2_wide)[1] <- "time"
+final2_wide
+```
+
+ENTIRE DATA
+```{r}
+names(final1_wide)
+wide_data <- rbind(final1_wide, final2_wide)
+wide_data <- wide_data %>% arrange(time)
+wide_data <- as.data.frame(wide_data)
+wide_data
+```
+
+
+
+## Fit first portion of data
+
+```{r}
+#probability of someone seeking promotion to next level
+#u= fraction of like-gendered individuals in level above
+#v= fraction of like-gendered individuals in current level
+#lambda= strength of homophilic tendency
+e <- exp(1)
+
+P_func <- function(u, v, lambda){
+  e <- exp(1)
+  denom <- 1 + e^(-lambda*(u-v))
+  return(1/denom)
+}
+
+#fraction of women in applicant pool
+F0_func <- function(u, v, lambda){
+  num <- v*P_func(u, v, lambda)
+  denom <- num + ((1-v)*(P_func(1-u, 1-v, lambda)))
+  return(num/denom)
+}
+
+#fraction of women promoted to next level
+#b= bias (b>0.5 means women are favored)
+F_func <- function(u, v, lambda, b){
+  num <- b*v*P_func(u, v, lambda)
+  denom <- num + ((1-b)*(1-v)*P_func(1-u, 1-v, lambda))
+  return(num/denom)
+}
+```
+
+
+## MODEL VARIABLES
+
+```{r}
+capital_r <- c(1/4, 1/5, 1/6, 1/7, 1/9)
+capital_r
+L <- length(capital_r)
+n <- c(13, 8, 5, 3, 2)
+lowercase_r <- vector(mode="numeric", length=length(capital_r))
+
+for(j in seq_along(capital_r)){
+  products <- vector(mode="numeric", length=length((j+1):L))
+  for(k in seq_along(products)){
+    products[k] <- capital_r[j+k]*n[j+k]
+  }
+  num <- sum(products)
+  denom <- capital_r[j] * n[j]
+  final <- num/denom
+  lowercase_r[j] <- final
+}
+lowercase_r
+0 -> lowercase_r[is.na(lowercase_r)]
+lowercase_r
+times <- unique(wide_data$time)
+times
+xstart <- as.numeric(wide_data[1, 2:6])
+xstart
+```
+
+
+# FULL MODEL
+
+```{r}
+full_model <- function (t, x, parms) {
+  x0 <- 0.5
+  x1 <- x[1]
+  x2 <- x[2]
+  x3 <- x[3]
+  x4 <- x[4]
+  x5 <- x[5]
+  cap_r <- parms$cap_r
+  low_r <- parms$low_r
+  lambda <- parms$lambda
+  b <- parms$bias
+  dx1dt <- (cap_r[1]*(1+low_r[1])*F_func(u = x1, v = x0, lambda = lambda, b = b)) - (cap_r[1]*x1) - (cap_r[1]*low_r[1]*F_func(u = x2, v = x1, lambda = lambda, b = b))
+  dx2dt <- (cap_r[2]*(1+low_r[2])*F_func(u = x2, v = x1, lambda = lambda, b = b)) - (cap_r[2]*x2) - (cap_r[2]*low_r[2]*F_func(u = x3, v = x2, lambda = lambda, b = b))
+  dx3dt <- (cap_r[3]*(1+low_r[3])*F_func(u = x3, v = x2, lambda = lambda, b = b)) - (cap_r[3]*x3) - (cap_r[3]*low_r[3]*F_func(u = x4, v = x3, lambda = lambda, b = b))
+  dx4dt <- (cap_r[4]*(1+low_r[4])*F_func(u = x4, v = x3, lambda = lambda, b = b)) - (cap_r[4]*x4) - (cap_r[4]*low_r[4]*F_func(u = x5, v = x4, lambda = lambda, b = b))
+  dx5dt <- (cap_r[5]*F_func(u = x5, v = x4, lambda = lambda, b = b)) - (cap_r[5]*x5)
+  derivs <- c(dx1dt, dx2dt, dx3dt, dx4dt, dx5dt)
+  list(derivs)
+}
+
+lambda <- 3
+
+b <- 0.6
+
+params <- list(cap_r = capital_r, low_r = lowercase_r, lambda = lambda, bias = b)
+
+full_output <- ode(y = xstart, times = times, func = full_model, parms = params)
+
+full_output <- as.data.frame(full_output)
+names(full_output) <- c("time", "lecturer", "instructor", "assistant professor", "associate professor", "full professor")
+head(full_output)
+
+full_data <- melt(full_output, id.vars = "time")
+full_data %>% mutate(homo=lambda, bias=b)
+head(full_data)
+full_data %>% ggplot(aes(x=time, y=value, color=variable)) +
+  geom_line() +
+  labs(x="Time", y="Fraction Women", color="Levels") +
+  theme_bw()
+```
+
+## FITTING
+
+https://cran.r-project.org/web/packages/FME/FME.pdf
+```{r}
+#estimate your parameters
+lambda_est <- 2
+b_est <- 0.5
+params_est <- list(cap_r = capital_r, low_r = lowercase_r, lambda = lambda_est, bias = b_est)
+params_est
+
+#ensure that your real data has the same #columns, column names, class as full_output
+
+#run the cost function, necessary for modFit
+cost_func <- function(p) {
+  params_est$lambda <- p[1]
+  params_est$bias <- p[2]
+  est <- ode(y = xstart, times = times, func = full_model, parms = params_est)
+  est <- as.data.frame(est)
+  names(est) <- c("time", "lecturer", "instructor", "assistant professor", "associate professor", "full professor")
+  #INSERT REAL DATA HERE INSTEAD OF FULL_OUTPUT
+  return(modCost(est, wide_data))
+}
+
+#fits the model to your estimations
+fit <- modFit(p = c(lambda = lambda_est, bias = b_est), f = cost_func)
+
+#estimates the parameters in your data
+summary(fit)
+fit_parm_est <- as.data.frame(summary(fit)$par)
+fit_parm_est
+```
+
+```{r}
+fit_params <- list(cap_r = capital_r, low_r = lowercase_r, lambda = fit_parm_est["lambda", "Estimate"], bias = fit_parm_est["bias", "Estimate"])
+
+fit_ode <- ode(y = xstart, times = times, func = full_model, parms = fit_params)
+
+fit_ode <- as.data.frame(fit_ode)
+names(fit_ode) <- c("year", "no academic rank", "lecturer", "instructor", "assistant professor", "associate professor", "full professor")
+
+fit_data <- melt(full_output, id.vars = "year")
+fit_data %>% mutate(homo=lambda, bias=b)
+head(fit_data)
+fit_graph <- fit_data %>% ggplot(aes(x=year, y=value, color=variable)) +
+  geom_line() +
+  labs(x="Year", y="Fraction Women", color="Levels") +
+  theme_bw()
+final1
+actual_graph <- final1 %>% ggplot(aes(x=year, y=fraction, color=ARANK)) +
+  geom_line() + 
+  labs(x="Year", y="Fraction Women", color="Levels") +
+  theme_bw()
+```
+
