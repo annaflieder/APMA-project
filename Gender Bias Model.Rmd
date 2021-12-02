@@ -50,23 +50,9 @@ F_func <- function(u, v, lambda, b){
 ```{r}
 capital_r <- c(1/4, 1/5, 1/6, 1/7, 1/9, 1/15)
 capital_r
-L <- length(capital_r)
-n <- c(13, 8, 5, 3, 2, 1)
-lowercase_r <- vector(mode="numeric", length=length(capital_r))
 
-for(j in seq_along(capital_r)){
-  products <- vector(mode="numeric", length=length((j+1):L))
-  for(k in seq_along(products)){
-    products[k] <- capital_r[j+k]*n[j+k]
-  }
-  num <- sum(products)
-  denom <- capital_r[j] * n[j]
-  final <- num/denom
-  lowercase_r[j] <- final
-}
-lowercase_r
-0 -> lowercase_r[is.na(lowercase_r)]
-lowercase_r
+n <- c(13, 8, 5, 3, 2, 1)
+
 times <- seq(from=0,to=150,by=1)
 xstart <- c(0.4, 0.3, 0.2, 0.1, 0.05, 0.01)
 ```
@@ -84,7 +70,20 @@ null_model <- function (t, x, parms) {
   x5 <- x[5]
   x6 <- x[6]
   cap_r <- parms$cap_r
-  low_r <- parms$low_r
+  L <- length(cap_r)
+  cap_n <- parms$cap_n
+  low_r <- vector(mode="numeric", length=length(cap_r))
+  for(j in seq_along(cap_r)){
+  products <- vector(mode="numeric", length=length((j+1):L))
+  for(k in seq_along(products)){
+    products[k] <- cap_r[j+k]*n[j+k]
+    }
+  num <- sum(products)
+  denom <- cap_r[j] * n[j]
+  final <- num/denom
+  low_r[j] <- final
+  }
+  0 -> low_r[is.na(low_r)]
   dx1dt <- cap_r[1] * (1 + low_r[1]) * (x0 - x1)
   dx2dt <- cap_r[2] * (1 + low_r[2]) * (x1 - x2)
   dx3dt <- cap_r[3] * (1 + low_r[3]) * (x2 - x3)
@@ -95,7 +94,7 @@ null_model <- function (t, x, parms) {
   list(derivs)
 }
 
-param_null <- list(cap_r = capital_r, low_r = lowercase_r)
+param_null <- list(cap_r = capital_r, cap_n = n)
 
 null_model <- ode(y = xstart, times = times, func = null_model, parms = param_null)
 
@@ -104,10 +103,15 @@ names(null_model) <- c("time", "undergrad", "grad", "postdoc", "tenure track", "
 
 null_data <- melt(null_model, id.vars = "time")
 head(null_data)
-null_data %>% ggplot(aes(x=time, y=value, color=variable)) +
+null_graph <- null_data %>% ggplot(aes(x=time, y=value, color=variable)) +
   geom_line() +
   labs(x="Time", y="Fraction Women", color="Levels") +
   theme_bw()
+null_graph
+
+pdf("null_model.jpg") 
+null_graph
+dev.off() 
 ```
 
 
@@ -123,22 +127,41 @@ model_homo_free <- function (t, x, parms) {
   x4 <- x[4]
   x5 <- x[5]
   x6 <- x[6]
-  b <- parms$bias
   cap_r <- parms$cap_r
-  low_r <- parms$low_r
-  dx1dt <- (cap_r[1]*(1+low_r[1])*(b*x0)/((b*x0)+((1-b)*(1-x0)))) - (cap_r[1]*x1) - ((cap_r[1]*low_r[1]*(b*x1))/((b*x1)+((1-b)*(1-x1))))
-  dx2dt <- (cap_r[2]*(1+low_r[2])*(b*x1)/((b*x1)+((1-b)*(1-x1)))) - (cap_r[2]*x2) - ((cap_r[2]*low_r[2]*(b*x2))/((b*x2)+((1-b)*(1-x2))))
-  dx3dt <- (cap_r[3]*(1+low_r[3])*(b*x2)/((b*x2)+((1-b)*(1-x2)))) - (cap_r[3]*x3) - ((cap_r[3]*low_r[3]*(b*x3))/((b*x3)+((1-b)*(1-x3))))
-  dx4dt <- (cap_r[4]*(1+low_r[4])*(b*x3)/((b*x3)+((1-b)*(1-x3)))) - (cap_r[4]*x4) - ((cap_r[4]*low_r[4]*(b*x4))/((b*x4)+((1-b)*(1-x4))))
-  dx5dt <- (cap_r[5]*(1+low_r[5])*(b*x4)/((b*x4)+((1-b)*(1-x4)))) - (cap_r[5]*x5) - ((cap_r[5]*low_r[5]*(b*x5))/((b*x5)+((1-b)*(1-x5))))
-  dx6dt <- (cap_r[6]*(1+low_r[6])*(b*x5)/((b*x5)+((1-b)*(1-x5)))) - (cap_r[6]*x6) - ((cap_r[6]*low_r[6]*(b*x6))/((b*x6)+((1-b)*(1-x6))))
+  L <- length(cap_r)
+  cap_n <- parms$cap_n
+  b <- parms$bias
+  low_r <- vector(mode="numeric", length=length(cap_r))
+  for(j in seq_along(cap_r)){
+  products <- vector(mode="numeric", length=length((j+1):L))
+  for(k in seq_along(products)){
+    products[k] <- cap_r[j+k]*n[j+k]
+  }
+  num <- sum(products)
+  denom <- cap_r[j] * n[j]
+  final <- num/denom
+  low_r[j] <- final
+  }
+  0 -> low_r[is.na(low_r)]
+  dx1dt <- (cap_r[1]*(1+low_r[1])*(b*x0)/((b*x0)+((1-b)*(1-x0)))) - 
+    (cap_r[1]*x1) - ((cap_r[1]*low_r[1]*(b*x1))/((b*x1)+((1-b)*(1-x1))))
+  dx2dt <- (cap_r[2]*(1+low_r[2])*(b*x1)/((b*x1)+((1-b)*(1-x1)))) - 
+    (cap_r[2]*x2) - ((cap_r[2]*low_r[2]*(b*x2))/((b*x2)+((1-b)*(1-x2))))
+  dx3dt <- (cap_r[3]*(1+low_r[3])*(b*x2)/((b*x2)+((1-b)*(1-x2)))) - 
+    (cap_r[3]*x3) - ((cap_r[3]*low_r[3]*(b*x3))/((b*x3)+((1-b)*(1-x3))))
+  dx4dt <- (cap_r[4]*(1+low_r[4])*(b*x3)/((b*x3)+((1-b)*(1-x3)))) - 
+    (cap_r[4]*x4) - ((cap_r[4]*low_r[4]*(b*x4))/((b*x4)+((1-b)*(1-x4))))
+  dx5dt <- (cap_r[5]*(1+low_r[5])*(b*x4)/((b*x4)+((1-b)*(1-x4)))) - 
+    (cap_r[5]*x5) - ((cap_r[5]*low_r[5]*(b*x5))/((b*x5)+((1-b)*(1-x5))))
+  dx6dt <- (cap_r[6]*(1+low_r[6])*(b*x5)/((b*x5)+((1-b)*(1-x5)))) - 
+    (cap_r[6]*x6) - ((cap_r[6]*low_r[6]*(b*x6))/((b*x6)+((1-b)*(1-x6))))
   derivs <- c(dx1dt, dx2dt, dx3dt, dx4dt, dx5dt, dx6dt)
   list(derivs)
 }
 
 b <- 0.35
 
-param_homo <- list(cap_r = capital_r, low_r = lowercase_r, bias=b)
+param_homo <- list(cap_r = capital_r, cap_n = n, bias = b)
 
 homo_free <- ode(y = xstart, times = times, func = model_homo_free, parms = param_homo)
 
@@ -146,7 +169,7 @@ homo_free <- as.data.frame(homo_free)
 names(homo_free) <- c("time", "undergrad", "grad", "postdoc", "tenure track", "tenured prof", "full prof")
 
 homo_free_data <- melt(homo_free, id.vars = "time")
-#only weird thing is when b=0.35, theres a weird dip for the lower levels in the early years
+
 homo_free_data %>% ggplot(aes(x=time, y=value, color=variable)) +
   geom_line() +
   labs(x="Time", y="Fraction Women", color="Levels") +
@@ -161,22 +184,22 @@ varied_biases_data <- vector(mode="list", length=length(biases_to_test))
 names(varied_biases_data) <- paste0("b=", biases_to_test)
 for(i in seq_along(biases_to_test)){
   bias_i <- biases_to_test[i]
-  parameter <- list(cap_r = capital_r, low_r = lowercase_r, bias=bias_i)
+  parameter <- list(cap_r = capital_r, cap_n = n, bias = bias_i)
   ode_solve <- ode(y = xstart, times = times, func = model_homo_free, parms = parameter)
   ode_solve <- as.data.frame(ode_solve)
   names(ode_solve) <- c("time", "undergrad", "grad", "postdoc", "tenure track", "tenured prof", "full prof")
   data <- melt(ode_solve, id.vars = "time")
-  data <- data %>% mutate(b_value = bias_i)
+  data <- data %>% mutate(b = bias_i)
   varied_biases_data[[i]] <- data
 }
 
 data_collected <- do.call(rbind, varied_biases_data)
-#everything looks good besides b=0.35
+
 data_collected %>% ggplot(aes(x=time, y=value, color=variable)) + 
   geom_line() +
   labs(x="Time", y="Fraction Women", color="Levels", title = "Homophily-Free Model") +
   theme_bw() +
-  facet_wrap(~ b_value)
+  facet_wrap(~ b, labeller = label_both)
 ```
 
 
@@ -192,9 +215,22 @@ model_bias_free <- function (t, x, parms) {
   x4 <- x[4]
   x5 <- x[5]
   x6 <- x[6]
-  lambda <- parms$lambda
   cap_r <- parms$cap_r
-  low_r <- parms$low_r
+  L <- length(cap_r)
+  cap_n <- parms$cap_n
+  lambda <- parms$lambda
+  low_r <- vector(mode="numeric", length=length(cap_r))
+  for(j in seq_along(cap_r)){
+  products <- vector(mode="numeric", length=length((j+1):L))
+  for(k in seq_along(products)){
+    products[k] <- cap_r[j+k]*cap_n[j+k]
+  }
+  num <- sum(products)
+  denom <- cap_r[j] * cap_n[j]
+  final <- num/denom
+  low_r[j] <- final
+  }
+  0 -> low_r[is.na(low_r)]
   dx1dt <- cap_r[1]*(((1+low_r[1])*F0_func(x1, x0, lambda)) - x1 - (low_r[1]*F0_func(x2, x1, lambda)))
   dx2dt <- cap_r[2]*(((1+low_r[2])*F0_func(x2, x1, lambda)) - x2 - (low_r[2]*F0_func(x3, x2, lambda)))
   dx3dt <- cap_r[3]*(((1+low_r[3])*F0_func(x3, x2, lambda)) - x3 - (low_r[3]*F0_func(x4, x3, lambda)))
@@ -205,10 +241,9 @@ model_bias_free <- function (t, x, parms) {
   list(derivs)
 }
 
-lambda <- 0
+lambda <- 5
 
-param_bias <- list(cap_r = capital_r, low_r = lowercase_r, lambda=lambda)
-param_bias
+param_bias <- list(cap_r = capital_r, cap_n = n, lambda = lambda)
 
 bias_free <- ode(y = xstart, times = times, func = model_bias_free, parms = param_bias)
 
@@ -227,11 +262,12 @@ bias_free_data %>% ggplot(aes(x=time, y=value, color=variable)) +
 ## BIAS FREE, graph multiple homophily levels
 ```{r}
 homophily_to_test <- c(2, 3, 4.5, 5)
+homophily_to_test
 varied_homo_data <- vector(mode="list", length=length(homophily_to_test))
 names(varied_homo_data) <- paste0("lambda=", homophily_to_test)
 for(i in seq_along(homophily_to_test)){
   lambda <- homophily_to_test[i]
-  param_bias <- list(cap_r = capital_r, low_r = lowercase_r, lambda=lambda)
+  param_bias <- list(cap_r = capital_r, cap_n = n, lambda = lambda)
   sol <- ode(y = xstart, times = times, func = model_bias_free, parms = param_bias)
   sol <- as.data.frame(sol)
   names(sol) <- c("time", "undergrad", "grad", "postdoc", "tenure track", "tenured prof", "full prof")
@@ -246,8 +282,7 @@ bias_free_collected %>% ggplot(aes(x=time, y=value, color=variable)) +
   geom_line() +
   labs(x="Time", y="Fraction Women", color="Levels", title = "Bias-Free Model") +
   theme_bw() +
-  facet_wrap(~ homophily)
-
+  facet_wrap(~ homophily, labeller = label_both)
 ```
 
 # FULL MODEL
@@ -262,14 +297,32 @@ full_model <- function (t, x, parms) {
   x5 <- x[5]
   x6 <- x[6]
   cap_r <- parms$cap_r
-  low_r <- parms$low_r
+  L <- length(cap_r)
+  cap_n <- parms$cap_n
   lambda <- parms$lambda
   b <- parms$bias
-  dx1dt <- (cap_r[1]*(1+low_r[1])*F_func(u = x1, v = x0, lambda = lambda, b = b)) - (cap_r[1]*x1) - (cap_r[1]*low_r[1]*F_func(u = x2, v = x1, lambda = lambda, b = b))
-  dx2dt <- (cap_r[2]*(1+low_r[2])*F_func(u = x2, v = x1, lambda = lambda, b = b)) - (cap_r[2]*x2) - (cap_r[2]*low_r[2]*F_func(u = x3, v = x2, lambda = lambda, b = b))
-  dx3dt <- (cap_r[3]*(1+low_r[3])*F_func(u = x3, v = x2, lambda = lambda, b = b)) - (cap_r[3]*x3) - (cap_r[3]*low_r[3]*F_func(u = x4, v = x3, lambda = lambda, b = b))
-  dx4dt <- (cap_r[4]*(1+low_r[4])*F_func(u = x4, v = x3, lambda = lambda, b = b)) - (cap_r[4]*x4) - (cap_r[4]*low_r[4]*F_func(u = x5, v = x4, lambda = lambda, b = b))
-  dx5dt <- (cap_r[5]*(1+low_r[5])*F_func(u = x5, v = x4, lambda = lambda, b = b)) - (cap_r[5]*x5) - (cap_r[5]*low_r[5]*F_func(u = x6, v = x5, lambda = lambda, b = b))
+  low_r <- vector(mode="numeric", length=length(cap_r))
+  for(j in seq_along(cap_r)){
+  products <- vector(mode="numeric", length=length((j+1):L))
+  for(k in seq_along(products)){
+    products[k] <- cap_r[j+k]*cap_n[j+k]
+    }
+  num <- sum(products)
+  denom <- cap_r[j] * cap_n[j]
+  final <- num/denom
+  low_r[j] <- final
+  }
+  0 -> low_r[is.na(low_r)]
+  dx1dt <- (cap_r[1]*(1+low_r[1])*F_func(u = x1, v = x0, lambda = lambda, b = b)) - (cap_r[1]*x1) - 
+    (cap_r[1]*low_r[1]*F_func(u = x2, v = x1, lambda = lambda, b = b))
+  dx2dt <- (cap_r[2]*(1+low_r[2])*F_func(u = x2, v = x1, lambda = lambda, b = b)) - (cap_r[2]*x2) - 
+    (cap_r[2]*low_r[2]*F_func(u = x3, v = x2, lambda = lambda, b = b))
+  dx3dt <- (cap_r[3]*(1+low_r[3])*F_func(u = x3, v = x2, lambda = lambda, b = b)) - (cap_r[3]*x3) - 
+    (cap_r[3]*low_r[3]*F_func(u = x4, v = x3, lambda = lambda, b = b))
+  dx4dt <- (cap_r[4]*(1+low_r[4])*F_func(u = x4, v = x3, lambda = lambda, b = b)) - (cap_r[4]*x4) - 
+    (cap_r[4]*low_r[4]*F_func(u = x5, v = x4, lambda = lambda, b = b))
+  dx5dt <- (cap_r[5]*(1+low_r[5])*F_func(u = x5, v = x4, lambda = lambda, b = b)) - (cap_r[5]*x5) - 
+    (cap_r[5]*low_r[5]*F_func(u = x6, v = x5, lambda = lambda, b = b))
   dx6dt <- (cap_r[6]*F_func(u = x6, v = x5, lambda = lambda, b = b)) - (cap_r[6]*x6)
   derivs <- c(dx1dt, dx2dt, dx3dt, dx4dt, dx5dt, dx6dt)
   list(derivs)
@@ -279,7 +332,7 @@ lambda <- 3
 
 b <- 0.3
 
-params <- list(cap_r = capital_r, low_r = lowercase_r, lambda = lambda, bias = b)
+params <- list(cap_r = capital_r, cap_n = n, lambda = lambda, bias = b)
 
 full_output <- ode(y = xstart, times = times, func = full_model, parms = params)
 
@@ -289,7 +342,6 @@ full_output <- as.data.frame(full_output)
 names(full_output) <- c("time", "undergrad", "grad", "postdoc", "tenure track", "tenured prof", "full prof")
 
 full_data <- melt(full_output, id.vars = "time")
-full_data %>% mutate(homo=lambda, bias=0.5)
 head(full_data)
 full_data %>% ggplot(aes(x=time, y=value, color=variable)) +
   geom_line() +
@@ -304,10 +356,9 @@ bias_test <- c(0.3, 0.3, 0.7, 0.7)
 homophily_test <- c(2, 4, 2, 4)
 trials <- if(length(bias_test) == length(homophily_test)){
   length(bias_test)
-} else{
+  } else{
   0
 }
-trials
 
 varied_full_data <- vector(mode="list", length=trials)
 names(varied_full_data)
@@ -321,7 +372,7 @@ names(varied_full_data)
 for(i in seq_len(trials)){
   b <- bias_test[i]
   l <- homophily_test[i]
-  params <- list(cap_r = capital_r, low_r = lowercase_r, lambda = l, bias = b)
+  params <- list(cap_r = capital_r, cap_n = n, lambda = lambda, bias = b)
   dat <- ode(y = xstart, times = times, func = full_model, parms = params)
   dat <- as.data.frame(dat)
   names(dat) <- c("time", "undergrad", "grad", "postdoc", "tenure track", "tenured prof", "full prof")
@@ -339,6 +390,4 @@ entire_full_model %>% ggplot(aes(x=time, y=value, color=variable)) +
   facet_grid(bias ~ homophily, labeller = label_both) +
   labs(x="Time", y="Fraction Women", color="Levels", title = "Full Model")
 ```
-
-
 
