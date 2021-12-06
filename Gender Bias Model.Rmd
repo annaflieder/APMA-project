@@ -303,14 +303,14 @@ full_model <- function (t, x, parms) {
   b <- parms$bias
   low_r <- vector(mode="numeric", length=length(cap_r))
   for(j in seq_along(cap_r)){
-  products <- vector(mode="numeric", length=length((j+1):L))
-  for(k in seq_along(products)){
-    products[k] <- cap_r[j+k]*cap_n[j+k]
-    }
-  num <- sum(products)
-  denom <- cap_r[j] * cap_n[j]
-  final <- num/denom
-  low_r[j] <- final
+    products <- vector(mode="numeric", length=length((j+1):L))
+      for(k in seq_along(products)){
+         products[k] <- cap_r[j+k]*cap_n[j+k]
+      }
+    num <- sum(products)
+    denom <- cap_r[j] * cap_n[j]
+    final <- num/denom
+    low_r[j] <- final
   }
   0 -> low_r[is.na(low_r)]
   dx1dt <- (cap_r[1]*(1+low_r[1])*F_func(u = x1, v = x0, lambda = lambda, b = b)) - (cap_r[1]*x1) - 
@@ -353,7 +353,7 @@ full_data %>% ggplot(aes(x=time, y=value, color=variable)) +
 ## FULL MODEL: graph multiple parameter values
 ```{r}
 bias_test <- c(0.3, 0.3, 0.7, 0.7)
-homophily_test <- c(2, 4, 2, 4)
+homophily_test <- c(1, 5, 1, 5)
 trials <- if(length(bias_test) == length(homophily_test)){
   length(bias_test)
   } else{
@@ -372,7 +372,7 @@ names(varied_full_data)
 for(i in seq_len(trials)){
   b <- bias_test[i]
   l <- homophily_test[i]
-  params <- list(cap_r = capital_r, cap_n = n, lambda = lambda, bias = b)
+  params <- list(cap_r = capital_r, cap_n = n, lambda = l, bias = b)
   dat <- ode(y = xstart, times = times, func = full_model, parms = params)
   dat <- as.data.frame(dat)
   names(dat) <- c("time", "undergrad", "grad", "postdoc", "tenure track", "tenured prof", "full prof")
