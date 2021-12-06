@@ -1,0 +1,129 @@
+---
+title: "Bifurcation Diagrams"
+author: "Anna Flieder"
+date: "12/2/2021"
+output: html_document
+---
+
+```{r, warning=FALSE, message=FALSE}
+library(tidyverse)
+library(lubridate)
+library(knitr)
+library(reshape2)
+library(car)
+library(deSolve)
+library(readxl)
+library(minpack.lm) # library for least squares fit using levenberg-marquart algorithm
+library(FME)
+```
+
+```{r}
+#probability of someone seeking promotion to next level
+#u= fraction of like-gendered individuals in level above
+#v= fraction of like-gendered individuals in current level
+#lambda= strength of homophilic tendency
+e <- exp(1)
+
+P_func <- function(u, v, lambda){
+  e <- exp(1)
+  denom <- 1 + e^(-lambda*(u-v))
+  return(1/denom)
+}
+
+#fraction of women in applicant pool
+F0_func <- function(u, v, lambda){
+  num <- v*P_func(u, v, lambda)
+  denom <- num + ((1-v)*(P_func(1-u, 1-v, lambda)))
+  return(num/denom)
+}
+
+#fraction of women promoted to next level
+#b= bias (b>0.5 means women are favored)
+F_func <- function(u, v, lambda, b){
+  num <- b*v*P_func(u, v, lambda)
+  denom <- num + ((1-b)*(1-v)*P_func(1-u, 1-v, lambda))
+  return(num/denom)
+}
+```
+
+
+## BIAS FREE MODEL
+
+```{r}
+model_bias_free <- function (t, x, parms) {
+  x0 <- 0.5
+  x1 <- x[1]
+  x2 <- x[2]
+  x3 <- x[3]
+  cap_r <- parms$cap_r
+  L <- length(cap_r)
+  cap_n <- parms$cap_n
+  lambda <- parms$lambda
+  low_r <- vector(mode="numeric", length=length(cap_r))
+  for(j in seq_along(cap_r)){
+  products <- vector(mode="numeric", length=length((j+1):L))
+  for(k in seq_along(products)){
+    products[k] <- cap_r[j+k]*cap_n[j+k]
+  }
+  num <- sum(products)
+  denom <- cap_r[j] * cap_n[j]
+  final <- num/denom
+  low_r[j] <- final
+  }
+  0 -> low_r[is.na(low_r)]
+  dx1dt <- cap_r[1]*(((1+low_r[1])*F0_func(x1, x0, lambda)) - x1 - (low_r[1]*F0_func(x2, x1, lambda)))
+  dx2dt <- cap_r[2]*(((1+low_r[2])*F0_func(x2, x1, lambda)) - x2 - (low_r[2]*F0_func(x3, x2, lambda)))
+  dx3dt <- cap_r[3]*F0_func(x3, x2, lambda) - cap_r[3]*x3
+  derivs <- c(dx1dt, dx2dt, dx3dt)
+  list(derivs)
+}
+
+lambda <- 5
+
+param_bias <- list(cap_r = capital_r, cap_n = n, lambda = lambda)
+
+bias_free <- ode(y = xstart, times = times, func = model_bias_free, parms = param_bias)
+
+bias_free <- as.data.frame(bias_free)
+names(bias_free) <- c("time", "undergrad", "grad", "postdoc")
+head(bias_free)
+
+bias_free_data <- melt(bias_free, id.vars = "time")
+head(bias_free_data)
+bias_free_data %>% ggplot(aes(x=time, y=value, color=variable)) +
+  geom_line() +
+  labs(x="Time", y="Fraction Women", color="Levels") +
+  theme_bw()
+```
+
+## VISUALIZATIONS
+```{r}
+homophily_to_test <- c(3.0, 3.4, 4.0, 4.9)
+homophily_to_test
+capital_r <- c(1/4, 1/5, 1/6)
+capital_r
+n <- c(70, 2, 1)
+times <- seq(from=0,to=300,by=1)
+xstart <- c(0.4, 0.3, 0.2)
+
+varied_homo_data <- vector(mode="list", length=length(homophily_to_test))
+names(varied_homo_data) <- paste0("lambda=", homophily_to_test)
+for(i in seq_along(homophily_to_test)){
+  lambda <- homophily_to_test[i]
+  param_bias <- list(cap_r = capital_r, cap_n = n, lambda = lambda)
+  sol <- ode(y = xstart, times = times, func = model_bias_free, parms = param_bias)
+  sol <- as.data.frame(sol)
+  names(sol) <- c("time", "undergrad", "grad", "postdoc")
+  dat <- melt(sol, id.vars = "time")
+  dat <- dat %>% mutate(homophily=lambda)
+  varied_homo_data[[i]] <- dat
+}
+
+bias_free_collected <- do.call(rbind, varied_homo_data)
+
+bias_free_collected %>% ggplot(aes(x=time, y=value, color=variable)) + 
+  geom_line() +
+  labs(x="Time", y="Fraction Women", color="Levels", title = "Bias-Free Model") +
+  theme_bw() +
+  facet_wrap(~ homophily, labeller = label_both)
+```
